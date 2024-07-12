@@ -71,24 +71,15 @@ jobs:
           cp Procfile deploy/Procfile
           cp -r .ebextensions deploy/.ebextensions
           cp -r .platform deploy/.platform
-          cd deploy && zip -r deploy.zip .
+          cd deploy && zip -r deploy.zip .  
 
       - name: Beanstalk Deploy
         uses: einaregilsson/beanstalk-deploy@v22
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          application_name: ElaBeansBlue
-          environment_name: ElaBeansBlue-env
+          application_name: BeansTalkBlue
+          environment_name: BeansTalkBlue-env
           version_label: github-action-${{steps.current-time.outputs.formattedTime}}
           region: ap-northeast-2
           deployment_package: deploy/deploy.zip
-
-      - name: Check Deployment Status
-        run: |
-          DEPLOY_STATUS=$(aws elasticbeanstalk describe-environments --environment-names ElaBeansBlue-env --query "Environments[0].Status" --output text --region ap-northeast-2)
-          if [ "$DEPLOY_STATUS" != "Ready" ]; then
-            echo "Deployment failed with status: $DEPLOY_STATUS"
-            aws elasticbeanstalk describe-events --environment-name ElaBeansBlue-env --region ap-northeast-2 --max-items 10
-            exit 1
-          fi
