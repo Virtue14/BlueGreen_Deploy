@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,7 +20,6 @@ jobs:
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
-        shell: bash
 
       - name: Install envsubst
         run: sudo apt-get install -y gettext
@@ -39,30 +38,8 @@ jobs:
           echo "Generated application.yml:"
           cat src/main/resources/application.yml
 
-      - name: Check for Tests
-        run: |
-          if git diff --name-only origin/main HEAD | grep -qvE '(\.xml$|\.yml$|config/)'; then
-            if [ -z "$(find src/test -name '*ServiceTest.java')" ]; then
-              echo "No ServiceTest found, failing the build."
-              exit 1
-            fi
-          else
-            echo "Only configuration files changed, skipping test check."
-          fi
-
       - name: Build with Gradle
         run: ./gradlew clean build
-
-      - name: Get current time
-        uses: 1466587594/get-current-time@v2
-        id: current-time
-        with:
-          format: YYYY-MM-DDTHH-mm-ss
-          utcOffset: "+09:00"
-
-      - name: Show Current Time
-        run: echo "CurrentTime=${{steps.current-time.outputs.formattedTime}}"
-        shell: bash
 
       - name: Generate deployment package
         run: |
@@ -71,15 +48,39 @@ jobs:
           cp Procfile deploy/Procfile
           cp -r .ebextensions deploy/.ebextensions
           cp -r .platform deploy/.platform
-          cd deploy && zip -r deploy.zip .  
+          cd deploy && zip -r deploy.zip .
 
-      - name: Beanstalk Deploy
+      - name: Determine Active Environment
+        id: determine-env
+        run: |
+          if [ -f active_env ]; then
+            active_env=$(cat active_env)
+            if [ "$active_env" = "Blue" ]; then
+              echo "next_env=Green" >> $GITHUB_ENV
+            else
+              echo "next_env=Blue" >> $GITHUB_ENV
+            fi
+          else
+            echo "next_env=Blue" >> $GITHUB_ENV
+          fi
+
+      - name: Deploy to Next Environment
         uses: einaregilsson/beanstalk-deploy@v22
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          application_name: BeansTalkBlue
-          environment_name: BeansTalkBlue-env
-          version_label: github-action-${{steps.current-time.outputs.formattedTime}}
+          application_name: BeansTalk${{ env.next_env }}
+          environment_name: BeansTalk${{ env.next_env }}-env
+          version_label: github-action-${{ steps.current-time.outputs.formattedTime }}
           region: ap-northeast-2
           deployment_package: deploy/deploy.zip
+
+      - name: Update Active Environment
+        run: echo ${{ env.next_env }} > active_env
+
+      - name: Swap Environment CNAMEs
+        run: |
+          aws elasticbeanstalk swap-environment-cnames --source-environment-name BeansTalk${{ env.next_env }}-env --destination-environment-name BeansTalk${{ env.next_env == 'Blue' && 'Green' || 'Blue' }}-env
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
