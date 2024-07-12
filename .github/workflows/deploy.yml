@@ -71,7 +71,7 @@ jobs:
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           application_name: BeansTalk${{ env.next_env }}
           environment_name: BeansTalk${{ env.next_env }}-env
-          version_label: github-action-${{ steps.current-time.outputs.formattedTime }}
+          version_label: github-action-${{ steps.determine-env.outputs.formattedTime }}
           region: ap-northeast-2
           deployment_package: deploy/deploy.zip
 
@@ -80,7 +80,9 @@ jobs:
 
       - name: Swap Environment CNAMEs
         run: |
-          aws elasticbeanstalk swap-environment-cnames --source-environment-name BeansTalk${{ env.next_env }}-env --destination-environment-name BeansTalk${{ env.next_env == 'Blue' && 'Green' || 'Blue' }}-env
+          source_env="BeansTalk${{ env.next_env }}-env"
+          dest_env="BeansTalk${{ env.next_env == 'Blue' && 'Green' || 'Blue' }}-env"
+          aws elasticbeanstalk swap-environment-cnames --source-environment-name $source_env --destination-environment-name $dest_env
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
