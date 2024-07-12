@@ -25,6 +25,20 @@ jobs:
       - name: Install envsubst
         run: sudo apt-get install -y gettext
 
+      - name: Create application.yml.template
+        run: |
+          mkdir -p src/main/resources
+          cat > src/main/resources/application.yml.template <<EOL
+          server:
+            port: 5000
+          EOL
+
+      - name: Set Yaml
+        run: |
+          envsubst < src/main/resources/application.yml.template > src/main/resources/application.yml
+          echo "Generated application.yml:"
+          cat src/main/resources/application.yml
+
       - name: Check for Tests
         run: |
           if git diff --name-only origin/main HEAD | grep -qvE '(\.xml$|\.yml$|config/)'; then
